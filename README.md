@@ -141,5 +141,3 @@ Use ```myagent.py``` and ```myenv.py``` to implement your agent and environment.
 ## AI Policy
 - Submitting or relying on AI-generated work that the student cannot explain, justify, or reproduce is not permitted and may result in a failing grade.
 - You may be asked by the instructor to explain any randomly selected portion of your code at any time after the assignment is submitted. Failure to respond within a reasonable timeframe will be considered academic plagiarism, regardless of whether AI tools were actually used, and will be reported immediately with an associated grade penalty.
-#   c s 2 7 2 - 2 6 f a - p a 2  
- 
