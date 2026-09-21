@@ -1,9 +1,6 @@
-"""Task 1: your own custom Gymnasium environment.
+"""Task 1: Custom Gymnasium environment.
 
-Design the world yourself. The requirements it has to meet are in the assignment
-readme.
-
-Delete this docstring and describe your own world instead.
+Complete a small stochastic maze environment for CS 272 PA2
 """
 
 import numpy as np
@@ -13,7 +10,38 @@ from gymnasium.envs.registration import register
 
 
 class MyEnv(gym.Env):
-    """TODO: one line on what this world is and what the agent is trying to do."""
+    """Navigate a 10x10 maze from the top entrance to the bottom exit"""
+    # Fixed maze is terrain: 0 = open cell (a walkable floor tile), 1 = wall
+    GRID = (
+        "0011111000",
+        "1101111101",
+        "1100011110",
+        "1111011110",
+        "1111000110",
+        "1111110110",
+        "1111000100",
+        "1111011100",
+        "1111000001",
+        "1111111100"
+    )
+    HEIGHT = len(GRID)
+    WIDTH = len(GRID[0])
+    START = (0, 0) # Maze entrance
+    GOAL = (9, 8) # Maze exit
+
+    # Action numbers are stable for the agent
+    UP = 0
+    RIGHT = 1
+    DOWN = 2
+    LEFT = 3
+
+    # Map each action to its change in (row, column) position:
+    ACTION_CHANGE = {
+        UP: (-1, 0),        # row −1, column unchanged
+        RIGHT: (0, 1),      # row unchanged, column +1
+        DOWN: (1, 0),       # row +1, column unchanged
+        LEFT: (0, -1),      # row unchanged, column -1
+    }
 
     metadata = {"render_modes": ["ansi"], "render_fps": 4}
 
