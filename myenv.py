@@ -2,11 +2,14 @@
 
 Complete a small stochastic maze environment for CS 272 PA2
 """
+from tkinter.constants import RIGHT
 
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.envs.registration import register
+from matplotlib.testing.widgets import click_and_drag
+from polars.testing.parametric import column
 
 
 class MyEnv(gym.Env):
@@ -43,10 +46,18 @@ class MyEnv(gym.Env):
         LEFT: (0, -1),      # row unchanged, column -1
     }
 
+    SLIP_PROBABILITY = 0.20         # make environment stochastic
+    STEP_REWARD = -0.10             # disincentivize extra steps
+    WALL_REWARD = -0.35             # disincentivize hitting wall
+    GOAL_REWARD = 10.0              # big reward for reaching goal
+
     metadata = {"render_modes": ["ansi"], "render_fps": 4}
 
     def __init__(self, render_mode: str | None = None):
         # TODO: describe your world here -- the map, the pieces, the constants.
+        ### check if global constants above are okay
+
+        ### Possibly add checks for the maze?
 
         # There are 100 possible cell observations, including cells behind walls
         self.observation_space = spaces.Discrete(self.HEIGHT * self.HEIGHT)
@@ -55,23 +66,89 @@ class MyEnv(gym.Env):
         if render_mode is not None and render_mode not in self.metadata["render_modes"]:
             raise ValueError(f"unsupported render_mode: {render_mode}")
         self.render_mode = render_mode
+        self._agent_pos = self.START # agent position initialized at start
+        self._steps = 0 # Count of steps taken
+        self._last_action: int | None = None # action agent requested: either int or None
+        self._last_real_action: int | None = None # direction used after stochastic noise
+
+    def _position_encoded(self, position: tuple[int, int]) -> int:
+        """Encode (row, column) as one integer in [0, 99]."""
+        row, column = position
+        return row * self.WIDTH + column
+
+    def _get_obs(self) ->int:
+        return self._position_encoded(self._agent_pos)
+
+    def _get_info(self) -> dict[str, object]:
+        """Get information on agent's position and actions"""
+        return {
+            "position": self._agent_pos,
+            "steps": self._steps,
+            "last_action": self._last_action,
+            "last_actual_action": self._last_real_action,
+        }
+
+    def _is_open(self, position: tuple[int, int]) -> bool:
+        """Return boolean for if space in maze is open"""
+        row, col = position
+        return (
+            0 <= self.HEIGHT and 0 <= self.WIDTH and self.GRID[row][col] != 1
+        )
+
 
     def reset(self, seed: int | None = None, options: dict | None = None):
         # This line seeds self.np_random. Without it, seeding does not work and
         # the reproducibility test fails.
         super().reset(seed=seed)
 
-        # TODO: put the world back to its starting state.
+        # put the world back to its starting state.
+        self._agent_pos = self.START
+        self._steps = 0
+        self._last_action = None
+        self._last_real_action = None
 
         return self._get_obs(), self._get_info()
 
+    def _move(self, action: int) -> tuple[int, int]:
+        row, col = self._agent_pos
+        change_row, change_col = self.ACTION_CHANGE[action]
+        candidate = (row + change_row, col + change_col)
+        if self._is_open(candidate):
+            return candidate
+        else:
+            return self._agent_pos
+
     def step(self, action: int):
+        """ ### add documentation later"""
         # TODO: apply the action, with noise drawn from self.np_random.
         #
         # Return terminated=True when the episode genuinely ends -- goal reached,
         # agent died, game over. Leave truncated as False and let the TimeLimit
         # wrapper from register() handle running out of time. The agent treats
         # the two differently, and so should you.
+        if not self.action_space.contains(action):
+            raise ValueError(f"Action is {action}: needs to be integer in [0,3], ")
+
+        action = int(action)
+        self._last_action = action
+
+        # Stochastic portion: Push agent perpendicular direction from requested direction
+        # Each direction are 10% likely to occur
+        slip = bool(self.np_random.random() < self.SLIP_PROBABILITY)
+        if slip:
+            flip_perpendicular = (
+                (self.UP, self.DOWN)
+                if action in (self,RIGHT, self.LEFT)
+                else (self.RIGHT, self.LEFT)
+            )
+            real_action = int(self.np_random.choice(flip_perpendicular))
+        else: real_action = action
+
+        self._last_real_action = real_action
+        
+        old_position = self._agent_pos
+        self._agent_pos = self._move(real_action)
+
 
         raise NotImplementedError
 
@@ -86,11 +163,12 @@ class MyEnv(gym.Env):
         pass
 
 
-# TODO: name your environment. The id must start with "cs272/" and end with a
-# version, and max_episode_steps must be large enough that a competent agent can
-# finish but small enough that a lost one gives up.
+# Named environment. The id must start with "cs272/" and end with a version, and
+# max_episode_steps must be large enough that a competent agent can finish but
+# small enough that a lost one gives up.
+ENV_ID = "cs272/Maze-v0"
 register(
-    id="cs272/MyEnv-v0",
+    id=ENV_ID,
     entry_point="myenv:MyEnv",
     max_episode_steps=300,
 )
