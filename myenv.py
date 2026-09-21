@@ -48,10 +48,9 @@ class MyEnv(gym.Env):
     def __init__(self, render_mode: str | None = None):
         # TODO: describe your world here -- the map, the pieces, the constants.
 
-        # TODO: set the two spaces. Both must be Discrete.
-
-        self.observation_space = # TODO
-        self.action_space = # TODO
+        # There are 100 possible cell observations, including cells behind walls
+        self.observation_space = spaces.Discrete(self.HEIGHT * self.HEIGHT)
+        self.action_space = spaces.Discrete(4) # possible actions: U, R, D, L
 
         if render_mode is not None and render_mode not in self.metadata["render_modes"]:
             raise ValueError(f"unsupported render_mode: {render_mode}")
