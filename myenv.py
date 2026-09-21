@@ -2,14 +2,10 @@
 
 Complete a small stochastic maze environment for CS 272 PA2
 """
-from tkinter.constants import RIGHT
-
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.envs.registration import register
-from matplotlib.testing.widgets import click_and_drag
-from polars.testing.parametric import column
 
 
 class MyEnv(gym.Env):
@@ -69,7 +65,7 @@ class MyEnv(gym.Env):
         self._agent_pos = self.START # agent position initialized at start
         self._steps = 0 # Count of steps taken
         self._last_action: int | None = None # action agent requested: either int or None
-        self._last_real_action: int | None = None # direction used after stochastic noise
+        self._last_true_action: int | None = None # direction used after stochastic noise
 
     def _position_encoded(self, position: tuple[int, int]) -> int:
         """Encode (row, column) as one integer in [0, 99]."""
@@ -80,16 +76,16 @@ class MyEnv(gym.Env):
         return self._position_encoded(self._agent_pos)
 
     def _get_info(self) -> dict[str, object]:
-        """Get information on agent's position and actions"""
+        """Return debugging information about the current state."""
         return {
             "position": self._agent_pos,
             "steps": self._steps,
             "last_action": self._last_action,
-            "last_actual_action": self._last_real_action,
+            "last_actual_action": self._last_true_action,
         }
 
     def _is_open(self, position: tuple[int, int]) -> bool:
-        """Return boolean for if space in maze is open"""
+        """Return whether a position is inside the maze and open."""
         row, col = position
         return (
             0 <= self.HEIGHT and 0 <= self.WIDTH and self.GRID[row][col] != 1
@@ -105,7 +101,7 @@ class MyEnv(gym.Env):
         self._agent_pos = self.START
         self._steps = 0
         self._last_action = None
-        self._last_real_action = None
+        self._last_true_action = None
 
         return self._get_obs(), self._get_info()
 
@@ -117,6 +113,34 @@ class MyEnv(gym.Env):
             return candidate
         else:
             return self._agent_pos
+
+    def _get_actual_action(self, action: int) -> tuple[int, bool]:
+        """Stochastic portion: Apply transition noise and return actual action
+        and slip status. If slip true, push agent perpendicular direction
+        from requested direction. Each direction are 10% likely to occur"""
+        slip = bool(self.np_random.random() < self.SLIP_PROBABILITY)
+        if not slip:
+            return action, False
+        flip_perpendicular = (
+            (self.UP, self.DOWN)
+            if action in (self.RIGHT, self.LEFT)
+            else (self.RIGHT, self.LEFT)
+        )
+        true_action = int(self.np_random.choice(flip_perpendicular))
+        return true_action, True
+
+    def _get_reward(self, moved: bool, reached_goal: bool) -> float:
+        """Calculate the reward for the transition."""
+        if reached_goal:
+            return self.GOAL_REWARD
+        if moved:
+            return self.STEP_REWARD
+        return self.WALL_REWARD
+
+    def _get_end_status(self, reached_goal: bool) -> tuple[bool, bool]:
+        """Return terminated and truncated flags."""
+        return reached_goal, False
+
 
     def step(self, action: int):
         """ ### add documentation later"""
@@ -132,25 +156,25 @@ class MyEnv(gym.Env):
         action = int(action)
         self._last_action = action
 
-        # Stochastic portion: Push agent perpendicular direction from requested direction
-        # Each direction are 10% likely to occur
-        slip = bool(self.np_random.random() < self.SLIP_PROBABILITY)
-        if slip:
-            flip_perpendicular = (
-                (self.UP, self.DOWN)
-                if action in (self,RIGHT, self.LEFT)
-                else (self.RIGHT, self.LEFT)
-            )
-            real_action = int(self.np_random.choice(flip_perpendicular))
-        else: real_action = action
+        # Apply stochastic portion to flip direction perpendicularly
+        true_action, slip = self._get_actual_action(action)
+        self._last_true_action = true_action
 
-        self._last_real_action = real_action
-        
         old_position = self._agent_pos
-        self._agent_pos = self._move(real_action)
+        self._agent_pos = self._move(true_action)
+        self._steps += 1
 
+        moved = self._agent_pos != old_position
+        goal_reached = self._agent_pos == self.GOAL
 
-        raise NotImplementedError
+        reward = self._get_reward(moved, goal_reached)
+        terminated, truncated = self._get_end_status(goal_reached)
+
+        info = self._get_info()
+        info["slipped"] = slip
+        info["moved"] = moved
+
+        return self._get_obs(), reward, terminated, truncated, info
 
     def render(self):
         """Return a readable picture of the current state, as a string."""
