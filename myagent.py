@@ -1,3 +1,11 @@
+
+# Isis Martinez, Ramya Nayak
+# CS 272 - Reinforcement Learning
+# Assignment 2
+# September 29, 2026
+
+# ----------------------------------------------------
+
 """Task 2: SARSA(lambda) with eligibility traces.
 
 Do not change the class name or the constructor signature -- the grading harness
