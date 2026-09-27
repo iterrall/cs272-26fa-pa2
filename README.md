@@ -21,7 +21,6 @@ Implemented or planned:
 
 Still to complete:
 
-- Finish and test `render()`
 - Pass Gymnasium's `check_env`
 - Add complete environment tests
 - Compare random play with a trained tabular agent
