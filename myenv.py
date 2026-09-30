@@ -32,6 +32,7 @@ class MyEnv(gym.Env):
     )
     HEIGHT = len(GRID)
     WIDTH = len(GRID[0])
+    GOAL = (9, 8)
 
     # Action numbers are stable for the agent
     UP = 0
@@ -66,7 +67,7 @@ class MyEnv(gym.Env):
             (r, c)
             for r in range(self.HEIGHT)
             for c in range(self.WIDTH)
-            if self.GRID[r][c] == '0'
+            if self.GRID[r][c] == '0' and (r, c) != self.GOAL
         ]
 
         # There are 100 possible cell observations, including cells behind walls
@@ -79,7 +80,6 @@ class MyEnv(gym.Env):
         
         self.render_mode = render_mode
         self._agent_pos = None                      # Agent position initialized in reset
-        self._goal_pos = None                       # Goal position initialized in reset
         self._steps = 0                             # count of steps taken
         self._last_action: int | None = None        # action agent requested: either int or None
         self._last_true_action: int | None = None   # direction used after stochastic noise
@@ -89,13 +89,11 @@ class MyEnv(gym.Env):
         # Seeds self.np_random. Seeding does not work reproducibility test fails without it
         super().reset(seed=seed)
 
-        # Randomly choose two UNIQUE positions from available open cells
-        start_idx, goal_idx = (
-            self.np_random.choice(len(self.open_cells), size=2, replace=False))
+        # Randomly choose ONE position from available open cells for the start
+        start_idx = self.np_random.choice(len(self.open_cells))
 
         # put the world back to its starting state.
         self._agent_pos = self.open_cells[start_idx]
-        self._goal_pos = self.open_cells[goal_idx]
         self._steps = 0
         self._last_action = None
         self._last_true_action = None
