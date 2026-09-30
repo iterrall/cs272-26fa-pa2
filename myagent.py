@@ -75,6 +75,8 @@ class SarsaLambdaAgent:
         """
         if trace not in (ACCUMULATING, REPLACING):
             raise ValueError(f"unknown trace type: {trace}")
+        if not 0.0 <= lam <= 1.0:
+            raise ValueError("lam must be in [0, 1]")
 
         self.env = env
         self.n_states = env.observation_space.n
@@ -111,13 +113,13 @@ class SarsaLambdaAgent:
         return argmax_action(self.q[state], self.rng)           # exploit: greedy
 
     def learn(self) -> list[float]:
-        """Train the agent and return the return from every episode."""
-        """
-        Run SARSA(lambda) for self.total_epi episodes, updating self.q.
+        """Train for ``total_epi`` episodes and return each episode's return.
 
-        Returns:
-            list[float]: the undiscounted return of each training episode, in
-            order. myrunner.py plots these.
+        For every transition, SARSA chooses the next action before computing the
+        non-terminal TD target. Eligibility traces are updated after the TD error.
+        When ``lam == 0``, the trace decays to zero immediately after the current
+        update, so only the current state-action pair is updated.
+        Terminal states are never used for bootstrapping.
         """
         returns = []
 
@@ -132,9 +134,7 @@ class SarsaLambdaAgent:
 
             while True:
                 # take action and observe
-                next_state, reward, terminated, truncated, _ = (
-                    self.env.step(action)
-                )
+                next_state, reward, terminated, truncated, _ = self.env.step(action)
 
                 episode_return += reward
                 # calculate TD error
@@ -177,16 +177,14 @@ class SarsaLambdaAgent:
         """Generate one greedy episode under the learned q table, for the report.
 
         Args:
-            max_steps: give up after this many steps.
+            max_steps: Maximum number of environment steps to execute. This is a
+                local safety bound in addition to any Gymnasium TimeLimit wrapper.
 
         Returns:
-            tuple[
-                list[tuple[int,int,float]]: the episode, as [(s, a, r), ...]
-                bool: True if it reached a terminal state, False if it ran out
-            ]
-            *Note:
-            episode: A list of (state, action, reward) tuples.
-            terminated: True if the goal or another terminal state was reached.
+            A tuple ``(episode, terminated)`` where ``episode`` contains one
+            ``(state, action, reward)`` tuple for every executed step, and
+            ``terminated`` is true only when the environment reported a terminal
+            transition. A truncation stops the run but returns ``terminated=False``.
         """
         episode: list[tuple[int, int, float]] = []
 
@@ -196,9 +194,7 @@ class SarsaLambdaAgent:
         for _ in range(max_steps):
             action = int(self.eps_greedy(state, exploration=False))
 
-            next_state, reward, terminated, truncated, _ = (
-                self.env.step(action)
-            )
+            next_state, reward, terminated, truncated, _ = self.env.step(action)
 
             next_state = int(next_state)
             reward = float(reward)
