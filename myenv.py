@@ -55,9 +55,18 @@ class MyEnv(gym.Env):
     metadata = {"render_modes": ["ansi"], "render_fps": 4}
 
     def __init__(self, render_mode: str | None = None):
+        """Create the maze environment.
+
+                Args:
+                    render_mode: ``"ansi"`` to return a text rendering from ``render()``;
+                        ``None`` disables rendering.
+                """
         # Precompute all open floor cells in the maze for random selection
         self.open_cells = [
-            (r, c) for r in range(self.HEIGHT) for c in range(self.WIDTH) if self.GRID[r][c] == '0'
+            (r, c)
+            for r in range(self.HEIGHT)
+            for c in range(self.WIDTH)
+            if self.GRID[r][c] == '0'
         ]
 
         # There are 100 possible cell observations, including cells behind walls
@@ -76,12 +85,13 @@ class MyEnv(gym.Env):
         self._last_true_action: int | None = None   # direction used after stochastic noise
 
     def reset(self, seed: int | None = None, options: dict | None = None):
-        # This line seeds self.np_random. Without it, seeding does not work and
-        # the reproducibility test fails.
+        """Reset the episode and randomly choose distinct open start/goal cells."""
+        # Seeds self.np_random. Seeding does not work reproducibility test fails without it
         super().reset(seed=seed)
 
         # Randomly choose two UNIQUE positions from available open cells
-        start_idx, goal_idx = self.np_random.choice(len(self.open_cells), size=2, replace=False)
+        start_idx, goal_idx = (
+            self.np_random.choice(len(self.open_cells), size=2, replace=False))
 
         # put the world back to its starting state.
         self._agent_pos = self.open_cells[start_idx]
@@ -93,24 +103,34 @@ class MyEnv(gym.Env):
         return self._get_obs(), self._get_info()
     
     def step(self, action: int):
-        """Run one timestep of the environment's dynamics using the agent's action.
+        """Advance the environment by one action.
+
+        The requested action is executed with probability 0.80. With probability
+        0.20, stochastic slip replaces it with one of the two perpendicular
+        directions, each with probability 0.10. The resulting direction moves
+        the agent only when the destination is an open in-bounds cell; otherwise
+        the agent stays in place.
 
         Args:
             action (int): The chosen action by the agent. Must be in [0, 3].
 
         Returns:
             tuple:
-                - observation (int): The agent's current position encoded as an int.
-                - reward (float): The reward earned from the action.
+                - observation (int): The agent's current position encoded as an
+                    int. It is ``row * 10 + column``
+                - reward (float): The reward earned from the action. +10 for
+                    reaching the goal, -0.10 for a valid move to a non-goal open cell,
+                    and -0.35 for attempting to move into a wall or outside the maze
                 - terminated (bool): True if the agent reaches the goal, False otherwise.
                 - truncated (bool): Always False for this environment (handled by TimeLimit).
                 - info (dict): Additional debugging info including slip tracking.
+                the registered
+            Gymnasium ``TimeLimit`` wrapper applies the 300-step limit.
         """
-
         # validate action
         if not self.action_space.contains(action):
-            raise ValueError(f"Action is {action}: needs to be integer in [0,3], ")
-
+            raise ValueError(f"Invalid action {action}: must be an integer in "
+                             f"[0, {self.action_space.n - 1}].")
         action = int(action)
         self._last_action = action
 
@@ -155,15 +175,15 @@ class MyEnv(gym.Env):
             rows.append("".join(row_chars))                     # string for this row
 
         maze_str = "\n".join(rows)                              # stack rows into a maze block
-        legend = f"\n[ Legend: Agent (A) at {self._agent_pos} | Goal (G) at {self._goal_pos} ]"
+        legend = (f"\n[ Legend: Agent (A) at {self._agent_pos} "
+                  f"| Goal (G) at {self._goal_pos} ]")
 
         return maze_str + legend
 
     def close(self):
         pass                                                    # this env has no external resources to release
 
-
-    # helper functions
+    # Helper functions
     def _position_encoded(self, position: tuple[int, int]) -> int:
         """Encode (row, column) as one integer in [0, 99]."""
         row, column = position
@@ -186,10 +206,15 @@ class MyEnv(gym.Env):
         """Return whether a position is inside the maze and open."""
         row, col = position
         return (
-            0 <= row and row < self.HEIGHT and 0 <= col and col < self.WIDTH and self.GRID[row][col] != '1'
+            0 <= row
+            and row < self.HEIGHT
+            and 0 <= col
+            and col < self.WIDTH
+            and self.GRID[row][col] != '1'
         )
 
     def _move(self, action: int) -> tuple[int, int]:
+        """Apply an action if its destination is open; otherwise stay put."""
         row, col = self._agent_pos
         change_row, change_col = self.ACTION_CHANGE[action]
         candidate = (row + change_row, col + change_col)
@@ -227,7 +252,6 @@ class MyEnv(gym.Env):
     def _get_end_status(self, reached_goal: bool) -> tuple[bool, bool]:
         """Return terminated and truncated flags."""
         return reached_goal, False
-
 
 # Named environment. The id must start with "cs272/" and end with a version, and
 # max_episode_steps must be large enough that a competent agent can finish but

@@ -1,91 +1,105 @@
 
-# CS 272 PA2: Maze Environment
+# CS 272 PA2: Maze Environment and SARSA(lambda) by Ramya Nayak and Isis Martinez
 
-This project implements a custom stochastic Gymnasium environment for Task 1 of
-CS 272 PA2. Task 2 will add a model-free SARSA(λ) agent with eligibility traces.
+This project implements a custom stochastic Gymnasium maze environment for Task 
+1 and a model-free SARSA(lambda) agent with eligibility traces for Task 2. The 
+environment is a 10x10 maze with `0` representing open floor and `1` 
+representing a wall. The agent receives a positive reward only when it reaches 
+the goal, so learning depends on discovering useful multi-step paths through 
+delayed reward.
+
+## Status
+Task 1 environment registration, ANSI rendering, documentation, and tests are 
+implemented. Task 2 SARSA(lambda), the RandomAgent baseline, the five-seed 
+lambda sweep, and report-material generation are implemented in `myagent.py` 
+and `myrunner.py`.
+
 
 ## Environment Story
 
-The agent is a traveler navigating a 10×10 maze. It begins at the entrance
-along the top edge and must reach the exit along the bottom edge.
-
-The maze contains open floor cells and walls. The agent can move up, right,
-down, or left. Movement is stochastic because occasional gusts push the agent
-in a perpendicular direction.
+The agent is a traveler navigating a 10x10 maze. At each reset, the environment 
+randomly selects two distinct open cells: one start cell for the agent and one 
+goal cell representing the exit. The objective is to reach the goal while 
+minimizing unnecessary movement and wall collisions. Movement is stochastic 
+because a gust can replace the requested action with a perpendicular direction.
 
 ## Maze Layout
 
-The maze uses the following representation:
+The fixed maze terrain is:
 
-- `0` = open cell
+- `0` = open/walkable cell
 - `1` = wall
 
 ```text
-0011111000
-1101111101
-1100011110
-1111011110
-1111000110
-1111110110
-1111000100
-1111011100
-1111000001
-1111111100
+0100010001
+0101010101
+0101010101
+0101010101
+0101010101
+0101010101
+0101010101
+0101010101
+0101010101
+0001000101
 ```
 
-The agent starts at 
-```text
-(0,0)
-```
-
-The goal is located at: text```(9, 8)```
+There are 54 open cells. The start and goal are sampled from these open cells 
+without replacement on every call to `reset()`.
 
 
-### Environment ID
 
-The registered Gymnasium environment is: `cs272/Maze-v0`
+* **Start Position:** Chosen dynamically at random on `reset()` from the pool of valid `0` tiles.
+* **Goal Position:** Chosen dynamically at random on `reset()` from the pool of valid `0` tiles.
 
-Example:
-```text
+## Registered Environment ID
+
+The registered Gymnasium environment is `cs272/Maze-v0`.
+
+```python
 import gymnasium as gym
 import myenv
 
 env = gym.make("cs272/Maze-v0", render_mode="ansi")
 ```
 
-### Constructor
-The environment constructor is:
+The registration applies `max_episode_steps=300`. The base environment always 
+returns `truncated=False`; Gymnasium's `TimeLimit` wrapper changes this to 
+`truncated=True` when the 300-step limit is reached.
 
-`MyEnv(render_mode: str | None = None)`
+## Constructor and Rendering
 
-The supported render mode is: "ansi"
+The constructor is:
 
-When ANSI rendering is enabled, render() returns a human-readable text
-representation of the maze.
+```python
+MyEnv(render_mode: str | None = None)
+```
+
+The supported rendering mode is `"ansi"`. With ANSI rendering enabled, 
+`render()` returns the 10x10 maze as text plus a legend showing the agent 
+(`A`) and goal (`G`) positions. Open cells are shown as `.`, and walls are shown as `#`.
 
 
 ### Observation Space
 
-The observation space is: `Discrete(100)`
+The observation space is `Discrete(100)`. The agent's `(row, column)` position 
+is encoded as:
 
-The agent's `(row, column)` position is encoded into one integer:
+```text
+state = row * 10 + column
+```
 
-`observation = row * width + column`
+Examples:
 
-Because the maze is 10x10:
+| Position | State |
+|---|---:|
+| `(0, 0)` | 0 |
+| `(0, 1)` | 1 |
+| `(1, 0)` | 10 |
+| `(9, 8)` | 98 |
 
-`observation = row * 10 + column`
+Wall cells are included in the 100-state observation space, but `_move()` never 
+enters a wall.
 
-For example:
-| Position |	Observation |
-| :--- | :---: |
-| (0, 0) | 0 |
-| (0, 1)	| 1 |
-| (1, 0)	| 10 |
-| (9, 8)	| 98 |
-
-The observation identifies the agent's current cell. Wall cells are included
-in the observation space but cannot be entered.
 
 ###  Action Space
 
@@ -101,73 +115,80 @@ The action space is: `Discrete(4)`
 If an action would move the agent outside the maze or into a wall, the agent
 remains in its current position.
 
-### Transition Noise
+### Transition Probabilities
+The environment is stochastic:
 
-The environment is stochastic.
+- Probability `0.80`: the requested action is used.
+- Probability `0.20`: a perpendicular gust occurs.
+- Under the gust, each of the two perpendicular directions has probability `0.10`.
 
-With probability 0.80, the requested action is used.
+All random choices use Gymnasium's seeded `self.np_random` generator, so a fixed 
+seed and action sequence is reproducible.
 
-With probability 0.20, a perpendicular gust occurs:
+## Rewards
 
-An up or down action may become left or right.
-A left or right action may become up or down.
-Each perpendicular direction has probability 0.10.
+| Event | Reward |
+|---|---:|
+| Reach the goal | `+10.0` |
+| Move to an open non-goal cell | `-0.10` |
+| Attempt to move into a wall or outside the maze | `-0.35` |
 
-All random choices are made using Gymnasium's seeded random generator,
-self.np_random.
+The step penalty encourages shorter routes, while the wall penalty discourages repeated invalid movement.
 
-### Rewards
+## Start and Goal Positions
 
-The reward structure is:
+The current implementation does not fix the start at `(0,0)` or the goal at `(9,8)`. Instead, each `reset()` samples a unique start and goal from the open cells. This makes the environment a family of navigation episodes over the same fixed maze terrain.
 
-| Event |	Reward | 
-| :--- | :---: | 
-| Reach the goal |	+10.0 |
-| Move to an open non-goal cell |	-0.10 |
-| Attempt to move into a wall or outside the maze |	-0.35 |
+The encoded state of `(9,8)` is `98`, which is used in tests and examples when that cell is intentionally assigned as the goal.
 
-The step penalty encourages the agent to find a short route. The wall penalty
-discourages repeatedly attempting invalid movements.
+## Episode Termination and Time Limit
 
-### Episode Behavior
+The base environment returns `terminated=True` when the agent reaches the sampled goal. The base environment always returns `truncated=False`.
 
-Each call to `reset()`:
+The registered Gymnasium `TimeLimit` wrapper uses `max_episode_steps=300` and produces `truncated=True` when 300 steps are reached without termination.
 
-* Places the agent at (0, 0)
-* Resets the step counter
-* Clears the previous action information
-* Applies the provided random seed
+## Task 2: SARSA(lambda)
 
-The episode terminates when the agent reaches `(9, 8)`.
+`myagent.py` implements tabular SARSA(lambda) using the state and action sizes obtained from the supplied Gymnasium environment. The Q table starts at `1.0` by default. Terminal states are not used for bootstrapping. With `lambda=0`, the eligibility trace is zeroed after the current update, giving ordinary one-step SARSA behavior.
 
-The environment itself returns:
+`best_run()` resets the environment, disables exploration, records `(state, action, reward)` for each step, and stops at either termination or truncation. `calc_return()` computes either the undiscounted sum of rewards or the discounted return using `gamma**timestep`.
 
-`truncated = False`
+## Runner and Lambda Sweep
 
-The registered Gymnasium TimeLimit wrapper ends an episode after 300 steps
-by setting:
+Run:
 
-`truncated = True`
+```bash
+python myrunner.py
+```
 
-### Testing
+The runner trains:
 
-Install the project dependencies:
+- a RandomAgent baseline for 5,000 episodes;
+- SARSA(lambda) for `lambda ∈ {0, 0.3, 0.6, 0.9, 1.0}`;
+- five seeds per lambda: `11, 22, 33, 44, 55`.
 
-`python -m pip install -r requirements.txt`
+Every episode return is recorded. The runner computes the mean learning curve across seeds, standard deviation across seeds, a 100-episode moving average, the first episode reaching the selected target return of `7.0`, mean final return over the last 100 episodes, and a sample greedy-policy episode rendered in ANSI text.
 
-Run the test suite:
+Generated report materials are written to `results/`:
 
-`python -m pytest -q`
+- `episode_returns.csv`
+- `lambda_learning_curves.png`
+- `lambda_summary.md`
+- `lambda_summary.csv`
+- `sample_greedy_run.md`
 
-The tests check:
+## Testing
 
-* Gymnasium API compliance
-* Observation and action spaces
-* Environment registration
-* ANSI rendering
-* Reproducibility with seeds
-* Stochastic transitions
-* Invalid-action handling
-* Goal termination
-* Time-limit truncation
+Install dependencies:
 
+```bash
+python -m pip install -r requirements.txt
+```
+
+Run the tests:
+
+```bash
+python -m pytest -q
+```
+
+The tests cover Gymnasium API compliance, observation/action spaces, registration, ANSI rendering, reproducibility, stochastic transitions, invalid actions, goal termination, TimeLimit truncation, goal reachability through valid movement, `calc_return()`, and the lambda=0 one-step SARSA behavior.
