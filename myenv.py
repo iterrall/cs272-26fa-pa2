@@ -17,8 +17,7 @@ from gymnasium.envs.registration import register
 
 
 class MyEnv(gym.Env):
-    """Navigate a 10x10 maze from the top entrance to the bottom exit"""
-    # Fixed maze is terrain: 0 = open cell (a walkable floor tile), 1 = wall
+    """Navigate a 10x10 maze from a random entrance to a random exit"""    # Fixed maze is terrain: 0 = open cell (a walkable floor tile), 1 = wall
     GRID = (
         "0100010001",
         "0101010101",
@@ -33,8 +32,6 @@ class MyEnv(gym.Env):
     )
     HEIGHT = len(GRID)
     WIDTH = len(GRID[0])
-    START = (0, 0)              # Maze entrance
-    GOAL = (9, 8)               # Maze exit
 
     # Action numbers are stable for the agent
     UP = 0
@@ -58,10 +55,10 @@ class MyEnv(gym.Env):
     metadata = {"render_modes": ["ansi"], "render_fps": 4}
 
     def __init__(self, render_mode: str | None = None):
-        # TODO: describe your world here -- the map, the pieces, the constants. 
-        ### check if global constants above are okay
-
-        ### Possibly add checks for the maze?
+        # Precompute all open floor cells in the maze for random selection
+        self.open_cells = [
+            (r, c) for r in range(self.HEIGHT) for c in range(self.WIDTH) if self.GRID[r][c] == '0'
+        ]
 
         # There are 100 possible cell observations, including cells behind walls
         self.observation_space = spaces.Discrete(self.HEIGHT * self.WIDTH)  # size of maze
@@ -72,18 +69,23 @@ class MyEnv(gym.Env):
             raise ValueError(f"unsupported render_mode: {render_mode}")
         
         self.render_mode = render_mode
-        self._agent_pos = self.START                            # agent position initialized at start
-        self._steps = 0                                         # count of steps taken
-        self._last_action: int | None = None                    # action agent requested: either int or None
-        self._last_true_action: int | None = None               # direction used after stochastic noise
+        self._agent_pos = None                      # Agent position initialized in reset
+        self._goal_pos = None                       # Goal position initialized in reset
+        self._steps = 0                             # count of steps taken
+        self._last_action: int | None = None        # action agent requested: either int or None
+        self._last_true_action: int | None = None   # direction used after stochastic noise
 
     def reset(self, seed: int | None = None, options: dict | None = None):
         # This line seeds self.np_random. Without it, seeding does not work and
         # the reproducibility test fails.
         super().reset(seed=seed)
 
+        # Randomly choose two UNIQUE positions from available open cells
+        start_idx, goal_idx = self.np_random.choice(len(self.open_cells), size=2, replace=False)
+
         # put the world back to its starting state.
-        self._agent_pos = self.START
+        self._agent_pos = self.open_cells[start_idx]
+        self._goal_pos = self.open_cells[goal_idx]
         self._steps = 0
         self._last_action = None
         self._last_true_action = None
@@ -91,13 +93,19 @@ class MyEnv(gym.Env):
         return self._get_obs(), self._get_info()
     
     def step(self, action: int):
-        """ ### add documentation later"""
-        # TODO: apply the action, with noise drawn from self.np_random.
-        #
-        # Return terminated=True when the episode genuinely ends -- goal reached,
-        # agent died, game over. Leave truncated as False and let the TimeLimit
-        # wrapper from register() handle running out of time. The agent treats
-        # the two differently, and so should you.
+        """Run one timestep of the environment's dynamics using the agent's action.
+
+        Args:
+            action (int): The chosen action by the agent. Must be in [0, 3].
+
+        Returns:
+            tuple:
+                - observation (int): The agent's current position encoded as an int.
+                - reward (float): The reward earned from the action.
+                - terminated (bool): True if the agent reaches the goal, False otherwise.
+                - truncated (bool): Always False for this environment (handled by TimeLimit).
+                - info (dict): Additional debugging info including slip tracking.
+        """
 
         # validate action
         if not self.action_space.contains(action):
@@ -115,7 +123,7 @@ class MyEnv(gym.Env):
         self._steps += 1
 
         moved = self._agent_pos != old_position
-        goal_reached = self._agent_pos == self.GOAL
+        goal_reached = self._agent_pos == self._goal_pos
 
         reward = self._get_reward(moved, goal_reached)
         terminated, truncated = self._get_end_status(goal_reached)
@@ -140,15 +148,16 @@ class MyEnv(gym.Env):
                 pos = (r, c)
                 if pos == self._agent_pos:
                     row_chars.append("A")                       # agent position shows up as "A"
-                elif pos == self.GOAL:
+                elif pos == self._goal_pos:
                     row_chars.append("G")                       # goal position shows up as "G"
                 else:
                     row_chars.append(symbols[self.GRID[r][c]])
             rows.append("".join(row_chars))                     # string for this row
 
         maze_str = "\n".join(rows)                              # stack rows into a maze block
+        legend = f"\n[ Legend: Agent (A) at {self._agent_pos} | Goal (G) at {self._goal_pos} ]"
 
-        return maze_str
+        return maze_str + legend
 
     def close(self):
         pass                                                    # this env has no external resources to release
