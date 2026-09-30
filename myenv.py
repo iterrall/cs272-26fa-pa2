@@ -203,13 +203,7 @@ class MyEnv(gym.Env):
     def _is_open(self, position: tuple[int, int]) -> bool:
         """Return whether a position is inside the maze and open."""
         row, col = position
-        return (
-            0 <= row
-            and row < self.HEIGHT
-            and 0 <= col
-            and col < self.WIDTH
-            and self.GRID[row][col] != '1'
-        )
+        return (0 <= row and row < self.HEIGHT and 0 <= col and col < self.WIDTH and self.GRID[row][col] != '1')
 
     def _move(self, action: int) -> tuple[int, int]:
         """Apply an action if its destination is open; otherwise stay put."""
