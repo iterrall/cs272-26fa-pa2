@@ -10,8 +10,8 @@ from myenv import ENV_ID, MyEnv
 
 def test_env_checker():
     """The environment follows the Gymnasium API."""
-    env = MyEnv()
-    check_env(env)
+    env = gym.make(ENV_ID)
+    check_env(env.unwrapped)
     env.close()
 
 

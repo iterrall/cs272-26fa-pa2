@@ -154,10 +154,7 @@ class MyEnv(gym.Env):
         pass                                                    # this env has no external resources to release
 
 
-    # -----------------------
     # helper functions
-    # -----------------------
-
     def _position_encoded(self, position: tuple[int, int]) -> int:
         """Encode (row, column) as one integer in [0, 99]."""
         row, column = position

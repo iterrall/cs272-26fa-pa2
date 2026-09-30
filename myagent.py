@@ -8,6 +8,9 @@
 
 """Task 2: SARSA(lambda) with eligibility traces.
 
+The agent is environment-independent. It reads the state and action sizes from
+the Gymnasium environment and does not import or inspect myenv.
+
 Do not change the class name or the constructor signature -- the grading harness
 constructs this class directly, and it will hand you an environment you have
 never seen. Read the sizes off the spaces and never assume anything about what a
@@ -108,50 +111,66 @@ class SarsaLambdaAgent:
         return argmax_action(self.q[state], self.rng)           # exploit: greedy
 
     def learn(self) -> list[float]:
-        """Run SARSA(lambda) for self.total_epi episodes, updating self.q.
+        """Train the agent and return the return from every episode."""
+        """
+        Run SARSA(lambda) for self.total_epi episodes, updating self.q.
 
         Returns:
             list[float]: the undiscounted return of each training episode, in
             order. myrunner.py plots these.
         """
         returns = []
+
         for episode in range(self.total_epi):
             traces = np.zeros_like(self.q)
-            state, _ = self.env.reset(seed=self.seed if episode == 0 else None)     # seed only once for reproducibility
-            action = self.eps_greedy(state)                                         # SARSA picks first action before loop
+
+            reset_seed = self.seed if episode == 0 else None
+            state, _ = self.env.reset(seed=reset_seed)
+            action = self.eps_greedy(state)
+
             episode_return = 0.0
 
             while True:
                 # take action and observe
-                next_state, reward, terminated, truncated, _ = self.env.step(action)
-                episode_return += reward
+                next_state, reward, terminated, truncated, _ = (
+                    self.env.step(action)
+                )
 
-                next_action = self.eps_greedy(next_state)
-                
+                episode_return += reward
                 # calculate TD error
                 if terminated:
+                    # No bootstrap from a terminal state.
                     delta = reward - self.q[state, action]
+
+                    # Keep terminal-state Q-values at zero.
+                    self.q[next_state, :] = 0.0
+                    next_action = None
                 else:
-                    delta = reward + self.gamma * self.q[next_state, next_action] - self.q[state, action]
+                    # Truncated states are real states, so bootstrap from them.
+                    next_action = self.eps_greedy(next_state)
+                    delta = (
+                            reward
+                            + self.gamma * self.q[next_state, next_action]
+                            - self.q[state, action]
+                    )
 
                 # mark state-action pair as visited
                 if self.trace == ACCUMULATING:
                     traces[state, action] += 1.0
                 else:
                     traces[state, action] = 1.0
-                
                 # update q value for every pair, and traces
                 self.q += self.alpha * delta * traces
                 traces *= self.gamma * self.lam
 
-                # next state and action
-                state, action = next_state, next_action
-                
                 if terminated or truncated:
                     break
+                # next state and action
+                state = next_state
+                action = next_action
 
             returns.append(episode_return)
-        
+
         return returns
 
     def best_run(self, max_steps: int = 300) -> tuple[list[tuple[int, int, float]], bool]:
@@ -165,12 +184,46 @@ class SarsaLambdaAgent:
                 list[tuple[int,int,float]]: the episode, as [(s, a, r), ...]
                 bool: True if it reached a terminal state, False if it ran out
             ]
+            *Note:
+            episode: A list of (state, action, reward) tuples.
+            terminated: True if the goal or another terminal state was reached.
         """
-        raise NotImplementedError
+        episode: list[tuple[int, int, float]] = []
+
+        state, _ = self.env.reset(seed=self.seed)
+        state = int(state)
+
+        for _ in range(max_steps):
+            action = int(self.eps_greedy(state, exploration=False))
+
+            next_state, reward, terminated, truncated, _ = (
+                self.env.step(action)
+            )
+
+            next_state = int(next_state)
+            reward = float(reward)
+
+            episode.append((state, action, reward))
+            state = next_state
+
+            if terminated or truncated:
+                return episode, bool(terminated)
+
+        return episode, False
 
     def calc_return(self, episode: list[tuple[Any, Any, float]], discounted: bool = False) -> float:
-        """Return of an episode given as [(s, a, r), ...]."""
-        raise NotImplementedError
+        """Return of an episode given as [(s, a, r), ...].
+        Calculate the undiscounted or discounted return of an episode."""
+
+        if not discounted:
+            return float(sum(reward for _, _, reward in episode))
+
+        return float(
+            sum(
+                (self.gamma ** timestep) * reward
+                for timestep, (_, _, reward) in enumerate(episode)
+            )
+        )
 
 
 class RandomAgent(SarsaLambdaAgent):
