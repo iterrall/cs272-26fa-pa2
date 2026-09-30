@@ -166,7 +166,7 @@ class MyEnv(gym.Env):
                 pos = (r, c)
                 if pos == self._agent_pos:
                     row_chars.append("A")                       # agent position shows up as "A"
-                elif pos == self._goal_pos:
+                elif pos == self.GOAL:
                     row_chars.append("G")                       # goal position shows up as "G"
                 else:
                     row_chars.append(symbols[self.GRID[r][c]])
@@ -174,7 +174,7 @@ class MyEnv(gym.Env):
 
         maze_str = "\n".join(rows)                              # stack rows into a maze block
         legend = (f"\n[ Legend: Agent (A) at {self._agent_pos} "
-                  f"| Goal (G) at {self._goal_pos} ]")
+                  f"| Goal (G) at {self.GOAL} ]")
 
         return maze_str + legend
 
