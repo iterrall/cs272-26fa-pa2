@@ -2,7 +2,7 @@
 
 ## Story and Objective
 
-The agent is a traveler navigating a fixed 10x10 maze. Each reset samples two distinct open cells: a random start and a random goal. The agent must reach the sampled goal while avoiding unnecessary movement and wall collisions. The environment is stochastic because a perpendicular gust can replace the requested direction.
+The agent is a traveler navigating a fixed 10x10 maze. Each reset samples two distinct open cells: a random start and a fixed goal. The agent must reach the sampled goal while avoiding unnecessary movement and wall collisions. The environment is stochastic because a perpendicular gust can replace the requested direction.
 
 ## Full Map
 

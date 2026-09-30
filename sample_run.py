@@ -25,7 +25,7 @@ def main():
         lam=0.9,
         total_epi=5000,
         init_val=1.0,
-        seed=272,
+        seed=11,
     )
 
     print("Training agent...")

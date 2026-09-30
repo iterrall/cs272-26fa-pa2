@@ -8,6 +8,20 @@ representing a wall. The agent receives a positive reward only when it reaches
 the goal, so learning depends on discovering useful multi-step paths through 
 delayed reward.
 
+## Repository Structure
+
+- `myenv.py` - Custom stochastic Gymnasium maze environment
+- `myagent.py` - SARSA(λ) agent with eligibility traces
+- `myrunner.py` - Training runs, λ sweep, plots, and summary tables
+- `env.md` - Detailed environment documentation
+- `testing_task1_and_task2.py` - Environment and agent tests
+- `sample_run.py` - Generates a sample greedy episode
+- `visualize.py` - Visualizes the maze
+- `maze_map.py` - Maze layout visualization
+- `results/` - Learning curves, tables, and sample-run output
+- `report_assets/` - Images used in the report
+- `requirements.txt` - Python dependencies
+
 ## Status
 Task 1 environment registration, ANSI rendering, documentation, and tests are 
 implemented. Task 2 SARSA(lambda), the RandomAgent baseline, the five-seed 
