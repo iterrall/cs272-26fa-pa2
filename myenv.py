@@ -141,7 +141,7 @@ class MyEnv(gym.Env):
         self._steps += 1
 
         moved = self._agent_pos != old_position
-        goal_reached = self._agent_pos == self._goal_pos
+        goal_reached = self._agent_pos == self.GOAL
 
         reward = self._get_reward(moved, goal_reached)
         terminated, truncated = self._get_end_status(goal_reached)
